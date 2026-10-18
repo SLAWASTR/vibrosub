@@ -26,6 +26,41 @@ Pixel 8 Pro оснащен одним из лучших в мире тактил
 
 ---
 
+## 🚀 Как загрузить на GitHub и получить готовый APK
+
+Проект настроен для **автоматической сборки через GitHub Actions**. Вам не нужно устанавливать Android Studio или Gradle на свой компьютер!
+
+### Шаг 1. Создайте новый репозиторий на GitHub
+1. Зайдите на [github.com](https://github.com) и нажмите **New repository**.
+2. Назовите его, например, `vibrosub`.
+3. Сделайте его **Public** (или Private).
+4. **Не** ставьте галочки "Add a README" или ".gitignore" (они уже готовы в проекте).
+
+### Шаг 2. Загрузите файлы в репозиторий
+Откройте терминал в папке проекта и выполните команды:
+
+```bash
+git init
+git add .
+git commit -m "Initial commit: VibroSub player for Pixel 8 Pro"
+git branch -M main
+git remote add origin https://github.com/ВАШ_ЛОГИН/vibrosub.git
+git push -u origin main
+```
+
+*(Замените `ВАШ_ЛОГИН` на ваш логин на GitHub).*
+
+### Шаг 3. Скачайте готовый APK из GitHub
+1. Как только вы сделаете `git push`, зайдите на страницу вашего репозитория на GitHub.
+2. Откройте вкладку **Actions** в верхнем меню.
+3. Вы увидите запущенную сборку **"Build VibroSub Pixel 8 Pro APK"**. Сборка занимает около 2–3 минут.
+4. Когда напротив сборки появится зеленая галочка ✅, кликните на неё.
+5. В самом низу страницы в блоке **Artifacts** нажмите на **VibroSub-Pixel8Pro-APK**.
+6. Скачается ZIP-архив с готовым подписанным файлом:
+   - `VibroSub-Pixel8Pro-Release.apk` — готовое приложение, готовое к установке на Pixel 8 Pro!
+
+---
+
 ## 📱 Как установить и запустить на Pixel 8 Pro
 
 1. Распакуйте скачанный zip и перекиньте файл `VibroSub-Pixel8Pro-Release.apk` на ваш телефон (через Telegram, Google Drive, Quick Share или USB-кабель).
