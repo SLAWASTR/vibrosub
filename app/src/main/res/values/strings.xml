@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">VibroSub</string>
+    <string name="channel_name">VibroSub Music Playback</string>
+    <string name="channel_desc">Active audio playback and tactile haptics</string>
+</resources>
