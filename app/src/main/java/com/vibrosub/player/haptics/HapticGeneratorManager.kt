@@ -20,7 +20,7 @@ class HapticGeneratorManager {
         release()
 
         try {
-            if (audioSessionId > 0 && HapticGenerator.isAvailable(audioSessionId)) {
+            if (audioSessionId > 0 && HapticGenerator.isAvailable()) {
                 hapticGenerator = HapticGenerator.create(audioSessionId).apply {
                     this.enabled = enable
                 }

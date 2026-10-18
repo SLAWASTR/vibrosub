@@ -51,7 +51,10 @@ class PixelHapticEngine(private val context: Context) {
                 .setUsage(VibrationAttributes.USAGE_MEDIA)
                 .apply {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        setFlags(VibrationAttributes.FLAG_BYPASS_INTERRUPTION_POLICY)
+                        setFlags(
+                            VibrationAttributes.FLAG_BYPASS_INTERRUPTION_POLICY,
+                            VibrationAttributes.FLAG_BYPASS_INTERRUPTION_POLICY
+                        )
                     }
                 }
                 .build()
@@ -90,7 +93,7 @@ class PixelHapticEngine(private val context: Context) {
 
         val hapticGen = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             try {
-                HapticGenerator.isAvailable(0)
+                HapticGenerator.isAvailable()
             } catch (e: Exception) {
                 false
             }
