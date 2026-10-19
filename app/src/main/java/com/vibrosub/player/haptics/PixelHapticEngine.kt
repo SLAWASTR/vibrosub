@@ -210,6 +210,45 @@ class PixelHapticEngine(private val context: Context) {
     }
 
     /**
+     * Tactile Melodic Chime / Glockenspiel / Guitar Pluck:
+     * High-frequency crystal-clear response specifically for tracks like Radiohead - No Surprises!
+     */
+    fun triggerMelodyChimeTick(velocity: Float, settings: HapticSettings) {
+        if (!settings.enabled || vibrator == null) return
+
+        val now = System.currentTimeMillis()
+        if (now - lastTickTime.get() < 28) return
+        lastTickTime.set(now)
+
+        val scaledVelocity = (velocity * settings.intensity * settings.chimeStrength).coerceIn(0.12f, 1.4f)
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && hardwareStatus.supportsLowTick) {
+                val primitiveScale = (scaledVelocity / 1.15f).coerceIn(0.15f, 1.0f)
+                val composition = VibrationEffect.startComposition()
+                    .addPrimitive(VibrationEffect.Composition.PRIMITIVE_LOW_TICK, primitiveScale)
+                    .compose()
+                vibrateWithFallback(composition)
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && hardwareStatus.supportsClick) {
+                val primitiveScale = (scaledVelocity / 1.3f).coerceIn(0.1f, 0.85f)
+                val composition = VibrationEffect.startComposition()
+                    .addPrimitive(VibrationEffect.Composition.PRIMITIVE_CLICK, primitiveScale)
+                    .compose()
+                vibrateWithFallback(composition)
+            } else if (hardwareStatus.hasAmplitudeControl) {
+                val amp = (scaledVelocity * 150f).toInt().coerceIn(30, 210)
+                val effect = VibrationEffect.createOneShot(18, amp)
+                vibrateWithFallback(effect)
+            } else {
+                val effect = VibrationEffect.createOneShot(18, VibrationEffect.DEFAULT_AMPLITUDE)
+                vibrateWithFallback(effect)
+            }
+        } catch (e: Exception) {
+            Log.e(tag, "Error triggering chime tick: ${e.message}")
+        }
+    }
+
+    /**
      * Continuous dynamic energy groove: modulates amplitude smoothly along the volume curve
      */
     fun triggerContinuousRumble(amplitude: Float, durationMs: Long, settings: HapticSettings) {

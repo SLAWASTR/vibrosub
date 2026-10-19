@@ -285,7 +285,36 @@ fun HapticSettingsCard(
                         colors = SliderDefaults.colors(thumbColor = ElectricCyan, activeTrackColor = ElectricCyan)
                     )
 
+                    // Chime / Bell Melody Strength (Radiohead)
+                    Text(
+                        text = "Колокольчики и мелодия (PRIMITIVE_LOW_TICK): ${(settings.chimeStrength * 100).toInt()}%",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextPrimary
+                    )
+                    Slider(
+                        value = settings.chimeStrength,
+                        onValueChange = { onSettingsChanged(settings.copy(chimeStrength = it)) },
+                        valueRange = 0.0f..2.0f,
+                        enabled = settings.enabled,
+                        colors = SliderDefaults.colors(thumbColor = ElectricCyan, activeTrackColor = ElectricCyan)
+                    )
+
                     Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Отклик на колокольчики и мелодию", style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
+                            Text("Для песен вроде No Surprises и акустики", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                        }
+                        Switch(
+                            checked = settings.enableMelodyChimes,
+                            onCheckedChange = { onSettingsChanged(settings.copy(enableMelodyChimes = it)) }
+                        )
+                    }
 
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),

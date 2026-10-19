@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.Uri
 import java.io.File
 import java.io.FileOutputStream
-import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.PI
@@ -15,9 +14,8 @@ import kotlin.random.Random
 object DemoBeatGenerator {
 
     /**
-     * Generates a 16-second looping electronic track with punchy 808 kicks,
+     * Generates a 12-second looping electronic track with punchy 808 kicks,
      * low-frequency sub-bass drops (40-60Hz), and crisp snare transients.
-     * Saved to app cache directory as a standard PCM 16-bit WAV file.
      */
     fun getOrCreateDemoTrack(context: Context): Uri {
         val file = File(context.cacheDir, "vibrosub_demo_808_beat.wav")
@@ -43,7 +41,6 @@ object DemoBeatGenerator {
             // 1. Kick Drum (Beats 0, 4, 8, 10, 12)
             val isKickBeat = beatIndex in listOf(0, 4, 8, 10, 12)
             if (isKickBeat && tInBeat < 0.45) {
-                // Pitch drop from 150 Hz down to 45 Hz
                 val kickFreq = 45.0 + 105.0 * exp(-tInBeat * 18.0)
                 val kickPhase = 2.0 * PI * kickFreq * tInBeat
                 val kickAmp = exp(-tInBeat * 6.0)
@@ -56,7 +53,6 @@ object DemoBeatGenerator {
                 val subFreq = if (beatIndex in listOf(6, 7)) 40.0 else 52.0
                 val subPhase = 2.0 * PI * subFreq * tInBeat
                 val subAmp = 0.75 * exp(-tInBeat * 2.5)
-                // Add warm 2nd harmonic
                 sample += (sin(subPhase) * 0.8 + sin(subPhase * 2.0) * 0.2) * subAmp
             }
 
@@ -76,12 +72,111 @@ object DemoBeatGenerator {
                 sample += hatNoise
             }
 
-            // Master soft clip
             val clamped = sample.coerceIn(-1.0, 1.0)
             pcmData[i] = (clamped * 30000.0).toInt().toShort()
         }
 
-        // Write WAV file
+        writeWavFile(file, pcmData, sampleRate)
+        return Uri.fromFile(file)
+    }
+
+    /**
+     * Generates a 14-second looping melodic acoustic track inspired by Radiohead - No Surprises:
+     * - Glockenspiel / Music Box bells (pure crystalline tones at 1400 - 3000 Hz)
+     * - Plucked acoustic guitar arpeggio (200 - 600 Hz)
+     * - Gentle melodic bass (85 Hz)
+     * - Soft brushed percussion
+     * Perfect for testing tactile bell and melodic accompaniment on Pixel 8 Pro!
+     */
+    fun getOrCreateRadioheadAcousticDemo(context: Context): Uri {
+        val file = File(context.cacheDir, "vibrosub_demo_no_surprises_acoustic.wav")
+        if (file.exists() && file.length() > 1000) {
+            return Uri.fromFile(file)
+        }
+
+        val sampleRate = 44100
+        val bpm = 76.0 // Radiohead No Surprises tempo
+        val beatsPerSecond = bpm / 60.0
+        val totalBeats = 16 // 4 bars of 4/4
+        val durationSeconds = (totalBeats / beatsPerSecond).toInt() + 1
+        val totalSamples = sampleRate * durationSeconds
+        val samplesPerBeat = (sampleRate / beatsPerSecond).toInt()
+        val samplesPerEighth = samplesPerBeat / 2
+
+        val pcmData = ShortArray(totalSamples)
+
+        // Melodic bell notes (frequencies in Hz): F5, Bb5, C6, D6
+        val bellFrequencies = doubleArrayOf(
+            698.46 * 2, // F6 1396.9 Hz
+            932.33 * 2, // Bb6 1864.6 Hz
+            1046.50 * 2, // C7 2093.0 Hz
+            1174.66 * 2, // D7 2349.3 Hz
+            1046.50 * 2, // C7
+            932.33 * 2,  // Bb6
+            698.46 * 2,  // F6
+            880.00 * 2   // A6 1760.0 Hz
+        )
+
+        // Guitar arpeggio frequencies (Hz)
+        val guitarFrequencies = doubleArrayOf(
+            174.61 * 2, // F4 349.2 Hz
+            220.00 * 2, // A4 440.0 Hz
+            261.63 * 2, // C5 523.2 Hz
+            293.66 * 2  // D5 587.3 Hz
+        )
+
+        for (i in 0 until totalSamples) {
+            val eighthIndex = (i / samplesPerEighth) % 32
+            val sampleInEighth = i % samplesPerEighth
+            val tInEighth = sampleInEighth.toDouble() / sampleRate
+
+            val beatIndex = (i / samplesPerBeat) % 16
+            val sampleInBeat = i % samplesPerBeat
+            val tInBeat = sampleInBeat.toDouble() / sampleRate
+
+            var sample = 0.0
+
+            // 1. Glockenspiel / Music Box Bells (Iconic No Surprises motif)
+            val bellPitch = bellFrequencies[eighthIndex % bellFrequencies.size]
+            if (tInEighth < 0.40) {
+                // Bell physics: fundamental + shimmer harmonics
+                val bellEnvelope = exp(-tInEighth * 9.0)
+                val bellTone = sin(2.0 * PI * bellPitch * tInEighth) * 0.7 +
+                        sin(2.0 * PI * (bellPitch * 2.76) * tInEighth) * 0.25 +
+                        sin(2.0 * PI * (bellPitch * 5.4) * tInEighth) * 0.1
+                sample += bellTone * bellEnvelope * 0.65
+            }
+
+            // 2. Plucked Acoustic Guitar
+            val guitarPitch = guitarFrequencies[(eighthIndex / 2) % guitarFrequencies.size]
+            if (tInEighth < 0.35) {
+                val guitarEnvelope = exp(-tInEighth * 7.5)
+                val guitarTone = sin(2.0 * PI * guitarPitch * tInEighth) * 0.5 +
+                        sin(2.0 * PI * (guitarPitch * 2.0) * tInEighth) * 0.25
+                sample += guitarTone * guitarEnvelope * 0.40
+            }
+
+            // 3. Gentle Acoustic Bassline (Melodic notes at 87 Hz and 116 Hz)
+            val isBassBeat = (beatIndex % 2 == 0)
+            if (isBassBeat && tInBeat < 0.65) {
+                val bassFreq = if (beatIndex % 4 == 0) 87.31 else 116.54 // F2 / Bb2
+                val bassEnvelope = exp(-tInBeat * 3.5)
+                val bassTone = sin(2.0 * PI * bassFreq * tInBeat) * 0.7 +
+                        sin(2.0 * PI * (bassFreq * 2.0) * tInBeat) * 0.3
+                sample += bassTone * bassEnvelope * 0.50
+            }
+
+            // 4. Soft Brushed Snare (Gentle backbeat on beats 2 and 4)
+            val isBrushBeat = (beatIndex % 4 == 1 || beatIndex % 4 == 3)
+            if (isBrushBeat && tInBeat < 0.22) {
+                val brushNoise = (Random.nextDouble() * 2.0 - 1.0) * exp(-tInBeat * 24.0) * 0.18
+                sample += brushNoise
+            }
+
+            val clamped = sample.coerceIn(-1.0, 1.0)
+            pcmData[i] = (clamped * 28000.0).toInt().toShort()
+        }
+
         writeWavFile(file, pcmData, sampleRate)
         return Uri.fromFile(file)
     }
