@@ -425,7 +425,7 @@ private fun SpotifyNowPlayingTab(
             modifier = Modifier
                 .size(280.dp)
                 .shadow(
-                    elevation = (12.dp + (animatedPulse * 24.dp)),
+                    elevation = (12.dp + (24.dp * animatedPulse)),
                     shape = RoundedCornerShape(24.dp),
                     ambientColor = auraColor,
                     spotColor = auraColor
@@ -441,7 +441,7 @@ private fun SpotifyNowPlayingTab(
                     )
                 )
                 .border(
-                    width = (2.dp + (animatedPulse * 3.5.dp)),
+                    width = (2.dp + (3.5.dp * animatedPulse)),
                     brush = Brush.linearGradient(
                         colors = listOf(auraColor, SubwooferViolet, auraColor)
                     ),
@@ -455,7 +455,7 @@ private fun SpotifyNowPlayingTab(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(110.dp + (animatedPulse * 30.dp))
+                        .size(110.dp + (30.dp * animatedPulse))
                         .clip(CircleShape)
                         .background(
                             Brush.radialGradient(
