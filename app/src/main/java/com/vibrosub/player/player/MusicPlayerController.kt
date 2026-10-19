@@ -73,6 +73,7 @@ class MusicPlayerController(private val context: Context) {
 
     val bassPulse: StateFlow<Float> = visualizerEngine.bassPulse
     val spectrumBars: StateFlow<FloatArray> = visualizerEngine.spectrumBars
+    val activeHapticLabel: StateFlow<String> = visualizerEngine.activeHapticLabel
     val hardwareStatus: HapticHardwareStatus = hapticEngine.hardwareStatus
 
     val exoPlayer: ExoPlayer by lazy {
@@ -87,6 +88,7 @@ class MusicPlayerController(private val context: Context) {
             addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     _trackInfo.value = _trackInfo.value.copy(isPlaying = isPlaying)
+                    visualizerEngine.isPlaying = isPlaying
                     if (isPlaying) {
                         startProgressUpdates()
                         attachAudioEffects()
@@ -145,13 +147,16 @@ class MusicPlayerController(private val context: Context) {
         )
     }
 
-    private fun attachAudioEffects() {
+    fun attachAudioEffects() {
         val sessionId = exoPlayer.audioSessionId
         if (sessionId > 0) {
             visualizerEngine.attachToSession(sessionId)
-            val useHapticGen = _settings.value.engineMode == HapticEngineMode.NATIVE_HAPTIC_GENERATOR
-            hapticGeneratorManager.attachToSession(sessionId, useHapticGen)
+            hapticGeneratorManager.attachToSession(sessionId, _settings.value.enabled)
         }
+    }
+
+    fun testShowcase() {
+        hapticEngine.playFullShowcaseSequence()
     }
 
     fun loadUri(uri: Uri, title: String? = null, artist: String? = null) {

@@ -83,6 +83,8 @@ import com.vibrosub.player.ui.theme.SurfaceDark
 import com.vibrosub.player.ui.theme.SurfaceDarkElevated
 import com.vibrosub.player.ui.theme.TextPrimary
 import com.vibrosub.player.ui.theme.TextSecondary
+import com.vibrosub.player.ui.theme.TextTertiary
+import com.vibrosub.player.ui.theme.VividGreen
 import androidx.compose.ui.graphics.Color
 import java.util.Locale
 
@@ -95,6 +97,7 @@ fun MainScreen(controller: MusicPlayerController) {
     val settings by controller.settings.collectAsState()
     val bassPulse by controller.bassPulse.collectAsState()
     val spectrumBars by controller.spectrumBars.collectAsState()
+    val activeHapticLabel by controller.activeHapticLabel.collectAsState()
 
     // Permission state
     var hasRecordAudioPermission by remember {
@@ -121,6 +124,12 @@ fun MainScreen(controller: MusicPlayerController) {
             permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
         }
         permissionLauncher.launch(permissionsToRequest.toTypedArray())
+    }
+
+    LaunchedEffect(hasRecordAudioPermission) {
+        if (hasRecordAudioPermission) {
+            controller.attachAudioEffects()
+        }
     }
 
     // Audio file picker launcher
@@ -309,7 +318,43 @@ fun MainScreen(controller: MusicPlayerController) {
                         isPlaying = trackInfo.isPlaying
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Live Tactile Activity Badge
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(SurfaceDarkElevated)
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(if (trackInfo.isPlaying) VividGreen else TextTertiary)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = activeHapticLabel,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (trackInfo.isPlaying) ElectricCyan else TextSecondary
+                            )
+                        }
+
+                        Text(
+                            text = "${(settings.intensity * 100).toInt()}% МОЩЬ",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = BassPunchOrange
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     // Track Information Card
                     Card(
@@ -470,7 +515,34 @@ fun MainScreen(controller: MusicPlayerController) {
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Instant Haptic Showcase Button
+                    Button(
+                        onClick = { controller.testShowcase() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = SurfaceDarkElevated),
+                        shape = RoundedCornerShape(14.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, ElectricCyan)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Vibration,
+                            contentDescription = "Test",
+                            tint = ElectricCyan,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Проверить виброотклик Pixel (Kick ➔ Snare ➔ Rise)",
+                            color = ElectricCyan,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     // Quick Vibration Intensity Slider Card
                     Card(

@@ -3,33 +3,35 @@ package com.vibrosub.player.model
 import android.net.Uri
 
 enum class HapticEngineMode(val displayName: String, val description: String) {
-    PIXEL_SUBWOOFER(
-        "Pixel Sub-Woofer",
-        "Комбинация глубокого рокота сабвуфера и резких импульсов удара бочки (PRIMITIVE_THUD)"
+    FULL_IMMERSION(
+        "Полное погружение (Full Immersion)",
+        "Комплексное тактильное сопровождение: глубокие удары бочки, четкие щелчки перкуссии и пульсирующая волна громкости трека"
     ),
-    TRANSIENT_BEAT(
-        "Динамический бит (Beat Punch)",
-        "Точные аппаратные импульсы на каждый удар барабана и басовые акценты"
+    RHYTHM_BEAT(
+        "Ритм и грув (Beat & Groove)",
+        "Четкие тактильные импульсы точно в такт барабанам и басовым транзиентам"
     ),
-    CONTINUOUS_WAVEFORM(
-        "Непрерывная волна баса",
-        "Плавная модуляция амплитуды вибрации в реальном времени по кривой низких частот"
+    DYNAMIC_FLOW(
+        "Плавная волна энергии (Dynamic Flow)",
+        "Бархатная непрерывная вибрация, повторяющая динамику и нарастания трека"
     ),
-    NATIVE_HAPTIC_GENERATOR(
-        "Google DSP HapticGenerator",
-        "Аппаратный алгоритм Android 12+, привязанный напрямую к аудиопотоку Pixel"
+    MAX_PUNCH(
+        "Экстремальный вибро-буст (Max Punch)",
+        "Максимально усиленный отклик с двойными импульсами мотора, сотрясающий смартфон"
     )
 }
 
 data class HapticSettings(
     val enabled: Boolean = true,
-    val engineMode: HapticEngineMode = HapticEngineMode.PIXEL_SUBWOOFER,
-    val intensity: Float = 1.25f, // 0.0f to 2.0f (125% default for rich punch)
-    val bassCutoffHz: Int = 120,   // 60, 100, 120, 180, 250 Hz
-    val sensitivityThreshold: Float = 0.22f, // noise floor gate
-    val thudStrength: Float = 1.0f, // 0.0 to 1.5
-    val clickStrength: Float = 0.6f, // 0.0 to 1.5
-    val rumbleStrength: Float = 0.85f // 0.0 to 1.5
+    val engineMode: HapticEngineMode = HapticEngineMode.FULL_IMMERSION,
+    val intensity: Float = 1.35f, // 0.0f to 2.0f (135% for noticeable tactile feel)
+    val bassCutoffHz: Int = 150,   // 80, 120, 150, 200, 300 Hz
+    val sensitivityThreshold: Float = 0.08f, // Responsive low threshold so feedback is always active
+    val thudStrength: Float = 1.3f, // 0.0 to 2.0
+    val clickStrength: Float = 1.0f, // 0.0 to 2.0
+    val rumbleStrength: Float = 1.1f, // 0.0 to 2.0
+    val enableClicksOnSnare: Boolean = true,
+    val enableContinuousGroove: Boolean = true
 )
 
 data class AudioTrackInfo(

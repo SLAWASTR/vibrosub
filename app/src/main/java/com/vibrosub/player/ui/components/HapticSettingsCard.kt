@@ -280,10 +280,38 @@ fun HapticSettingsCard(
                     Slider(
                         value = settings.rumbleStrength,
                         onValueChange = { onSettingsChanged(settings.copy(rumbleStrength = it)) },
-                        valueRange = 0.0f..1.5f,
+                        valueRange = 0.0f..2.0f,
                         enabled = settings.enabled,
                         colors = SliderDefaults.colors(thumbColor = ElectricCyan, activeTrackColor = ElectricCyan)
                     )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Щелчки на снейр и перкуссию", style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
+                        Switch(
+                            checked = settings.enableClicksOnSnare,
+                            onCheckedChange = { onSettingsChanged(settings.copy(enableClicksOnSnare = it)) }
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Тактильная волна по громкости", style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
+                        Switch(
+                            checked = settings.enableContinuousGroove,
+                            onCheckedChange = { onSettingsChanged(settings.copy(enableContinuousGroove = it)) }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     // Low-Pass Filter Cutoff
                     Text(
@@ -296,7 +324,7 @@ fun HapticSettingsCard(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        listOf(60, 100, 120, 180, 250).forEach { freq ->
+                        listOf(80, 120, 150, 200, 300).forEach { freq ->
                             val isSelected = settings.bassCutoffHz == freq
                             Text(
                                 text = "$freq Hz",
@@ -317,14 +345,14 @@ fun HapticSettingsCard(
 
                     // Noise Gate / Sensitivity
                     Text(
-                        text = "Порог чувствительности (Шумоподавление): ${(settings.sensitivityThreshold * 100).toInt()}%",
+                        text = "Порог чувствительности: ${(settings.sensitivityThreshold * 100).toInt()}% (чем ниже, тем легче срабатывает)",
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextPrimary
                     )
                     Slider(
                         value = settings.sensitivityThreshold,
                         onValueChange = { onSettingsChanged(settings.copy(sensitivityThreshold = it)) },
-                        valueRange = 0.05f..0.60f,
+                        valueRange = 0.02f..0.30f,
                         enabled = settings.enabled
                     )
                 }

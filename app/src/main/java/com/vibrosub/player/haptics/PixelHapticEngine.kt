@@ -8,7 +8,12 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
+import com.vibrosub.player.model.HapticEngineMode
 import com.vibrosub.player.model.HapticSettings
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicLong
 
 data class HapticHardwareStatus(
@@ -39,25 +44,23 @@ class PixelHapticEngine(private val context: Context) {
 
     private val lastThudTime = AtomicLong(0L)
     private val lastClickTime = AtomicLong(0L)
+    private val lastTickTime = AtomicLong(0L)
     private val lastRumbleTime = AtomicLong(0L)
 
     val hardwareStatus: HapticHardwareStatus by lazy {
         queryHardwareCapabilities()
     }
 
-    private val mediaVibrationAttributes: VibrationAttributes? by lazy {
+    // Use USAGE_TOUCH for responsive, unsilenced tactile feedback on Pixel devices
+    private val touchVibrationAttributes: VibrationAttributes? by lazy {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            VibrationAttributes.Builder()
-                .setUsage(VibrationAttributes.USAGE_MEDIA)
-                .apply {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        setFlags(
-                            VibrationAttributes.FLAG_BYPASS_INTERRUPTION_POLICY,
-                            VibrationAttributes.FLAG_BYPASS_INTERRUPTION_POLICY
-                        )
-                    }
-                }
-                .build()
+            try {
+                VibrationAttributes.Builder()
+                    .setUsage(VibrationAttributes.USAGE_TOUCH)
+                    .build()
+            } catch (e: Exception) {
+                null
+            }
         } else {
             null
         }
@@ -117,63 +120,65 @@ class PixelHapticEngine(private val context: Context) {
     }
 
     /**
-     * Triggers the Pixel 8 Pro deep bass kick impact (PRIMITIVE_THUD)
-     * Normalized velocity 0.0f..1.0f
+     * Tactile Kick Drum / Sub-Bass Impact (PRIMITIVE_THUD or reinforced amplitude pulse)
      */
     fun triggerSubwooferPunch(velocity: Float, settings: HapticSettings) {
         if (!settings.enabled || vibrator == null) return
 
         val now = System.currentTimeMillis()
-        // 55ms minimum interval to allow the mechanical LRA motor to finish full displacement
-        if (now - lastThudTime.get() < 55) return
+        if (now - lastThudTime.get() < 45) return
         lastThudTime.set(now)
 
-        val scaledVelocity = (velocity * settings.intensity * settings.thudStrength).coerceIn(0.05f, 1.0f)
+        val scaledVelocity = (velocity * settings.intensity * settings.thudStrength).coerceIn(0.15f, 2.0f)
 
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && hardwareStatus.supportsThud) {
+            if (settings.engineMode == HapticEngineMode.MAX_PUNCH) {
+                // Maximum tactile displacement for physical thump
+                val amp = (scaledVelocity * 255f).toInt().coerceIn(120, 255)
+                val effect = VibrationEffect.createOneShot(45, amp)
+                vibrateWithFallback(effect)
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && hardwareStatus.supportsThud) {
+                val primitiveScale = (scaledVelocity / 1.4f).coerceIn(0.1f, 1.0f)
                 val composition = VibrationEffect.startComposition()
-                    .addPrimitive(VibrationEffect.Composition.PRIMITIVE_THUD, scaledVelocity)
+                    .addPrimitive(VibrationEffect.Composition.PRIMITIVE_THUD, primitiveScale)
                     .compose()
-
-                vibrateWithAttributes(composition)
+                vibrateWithFallback(composition)
             } else if (hardwareStatus.hasAmplitudeControl) {
-                // High precision amplitude fallback
-                val amp = (scaledVelocity * 255).toInt().coerceIn(1, 255)
+                val amp = (scaledVelocity * 220f).toInt().coerceIn(60, 255)
                 val effect = VibrationEffect.createOneShot(35, amp)
-                vibrateWithAttributes(effect)
+                vibrateWithFallback(effect)
             } else {
-                val effect = VibrationEffect.createOneShot(30, VibrationEffect.DEFAULT_AMPLITUDE)
-                vibrateWithAttributes(effect)
+                val effect = VibrationEffect.createOneShot(35, VibrationEffect.DEFAULT_AMPLITUDE)
+                vibrateWithFallback(effect)
             }
         } catch (e: Exception) {
-            Log.e(tag, "Error triggering bass punch: ${e.message}")
+            Log.e(tag, "Error triggering punch: ${e.message}")
         }
     }
 
     /**
-     * Triggers crisp snare/transient click (PRIMITIVE_CLICK or PRIMITIVE_LOW_TICK)
+     * Tactile Snare / Clap transient click (PRIMITIVE_CLICK)
      */
     fun triggerTransientClick(velocity: Float, settings: HapticSettings) {
         if (!settings.enabled || vibrator == null) return
 
         val now = System.currentTimeMillis()
-        if (now - lastClickTime.get() < 40) return
+        if (now - lastClickTime.get() < 35) return
         lastClickTime.set(now)
 
-        val scaledVelocity = (velocity * settings.intensity * settings.clickStrength).coerceIn(0.05f, 1.0f)
+        val scaledVelocity = (velocity * settings.intensity * settings.clickStrength).coerceIn(0.1f, 1.5f)
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && hardwareStatus.supportsClick) {
+                val primitiveScale = (scaledVelocity / 1.3f).coerceIn(0.1f, 1.0f)
                 val composition = VibrationEffect.startComposition()
-                    .addPrimitive(VibrationEffect.Composition.PRIMITIVE_CLICK, scaledVelocity)
+                    .addPrimitive(VibrationEffect.Composition.PRIMITIVE_CLICK, primitiveScale)
                     .compose()
-
-                vibrateWithAttributes(composition)
+                vibrateWithFallback(composition)
             } else if (hardwareStatus.hasAmplitudeControl) {
-                val amp = (scaledVelocity * 220).toInt().coerceIn(1, 255)
-                val effect = VibrationEffect.createOneShot(15, amp)
-                vibrateWithAttributes(effect)
+                val amp = (scaledVelocity * 180f).toInt().coerceIn(40, 255)
+                val effect = VibrationEffect.createOneShot(20, amp)
+                vibrateWithFallback(effect)
             }
         } catch (e: Exception) {
             Log.e(tag, "Error triggering click: ${e.message}")
@@ -181,66 +186,118 @@ class PixelHapticEngine(private val context: Context) {
     }
 
     /**
-     * Modulated continuous rumble for sub-bass tones and rolling 808 bass lines
+     * Tactile Hi-Hat / Percussion Micro-Tick (PRIMITIVE_LOW_TICK)
+     */
+    fun triggerSubtleTick(velocity: Float, settings: HapticSettings) {
+        if (!settings.enabled || vibrator == null) return
+
+        val now = System.currentTimeMillis()
+        if (now - lastTickTime.get() < 30) return
+        lastTickTime.set(now)
+
+        val scaledVelocity = (velocity * settings.intensity).coerceIn(0.08f, 1.0f)
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && hardwareStatus.supportsLowTick) {
+                val composition = VibrationEffect.startComposition()
+                    .addPrimitive(VibrationEffect.Composition.PRIMITIVE_LOW_TICK, scaledVelocity)
+                    .compose()
+                vibrateWithFallback(composition)
+            }
+        } catch (e: Exception) {
+            Log.e(tag, "Error triggering tick: ${e.message}")
+        }
+    }
+
+    /**
+     * Continuous dynamic energy groove: modulates amplitude smoothly along the volume curve
      */
     fun triggerContinuousRumble(amplitude: Float, durationMs: Long, settings: HapticSettings) {
         if (!settings.enabled || vibrator == null) return
 
         val now = System.currentTimeMillis()
-        if (now - lastRumbleTime.get() < 25) return
+        if (now - lastRumbleTime.get() < 22) return
         lastRumbleTime.set(now)
 
-        val scaledAmp = (amplitude * settings.intensity * settings.rumbleStrength).coerceIn(0.0f, 1.0f)
-        if (scaledAmp < 0.05f) return
+        val effectiveAmp = (amplitude * settings.intensity * settings.rumbleStrength).coerceIn(0.05f, 1.5f)
+        if (effectiveAmp < 0.04f) return
 
         try {
             if (hardwareStatus.hasAmplitudeControl) {
-                val ampInt = (scaledAmp * 255).toInt().coerceIn(1, 255)
-                val effect = VibrationEffect.createOneShot(durationMs.coerceIn(15, 60), ampInt)
-                vibrateWithAttributes(effect)
+                val ampInt = (effectiveAmp * 200f).toInt().coerceIn(15, 255)
+                val effect = VibrationEffect.createOneShot(durationMs.coerceIn(15, 55), ampInt)
+                vibrateWithFallback(effect)
             } else {
-                val effect = VibrationEffect.createOneShot(durationMs.coerceIn(15, 60), VibrationEffect.DEFAULT_AMPLITUDE)
-                vibrateWithAttributes(effect)
+                val effect = VibrationEffect.createOneShot(durationMs.coerceIn(15, 50), VibrationEffect.DEFAULT_AMPLITUDE)
+                vibrateWithFallback(effect)
             }
         } catch (e: Exception) {
-            Log.e(tag, "Error triggering rumble: ${e.message}")
+            Log.e(tag, "Error triggering groove: ${e.message}")
         }
     }
 
     /**
-     * Direct test trigger for any hardware primitive (for the Haptic Benchmark UI)
+     * Direct test trigger for any hardware primitive
      */
     fun testPrimitive(primitiveId: Int, scale: Float = 1.0f) {
-        if (vibrator == null) return
+        val vib = vibrator ?: return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             try {
-                if (vibrator.areAllPrimitivesSupported(primitiveId)) {
+                if (vib.areAllPrimitivesSupported(primitiveId)) {
                     val composition = VibrationEffect.startComposition()
-                        .addPrimitive(primitiveId, scale.coerceIn(0.01f, 1.0f))
+                        .addPrimitive(primitiveId, scale.coerceIn(0.1f, 1.0f))
                         .compose()
-                    vibrateWithAttributes(composition)
+                    vibrateWithFallback(composition)
+                    return
                 }
             } catch (e: Exception) {
-                Log.e(tag, "Failed to test primitive $primitiveId: ${e.message}")
+                Log.e(tag, "Failed primitive test: ${e.message}")
+            }
+        }
+        // Fallback test pulse
+        testWaveformDemo()
+    }
+
+    /**
+     * Multi-stage showcase sequence demonstrating Pixel 8 Pro LRA motor capabilities:
+     * Kick Thud -> Snare Click -> Low Tick -> Quick Rise Swell -> Heavy Drop
+     */
+    fun playFullShowcaseSequence() {
+        val scope = CoroutineScope(Dispatchers.Main)
+        scope.launch {
+            // 1. Kick Thud
+            testPrimitive(VibrationEffect.Composition.PRIMITIVE_THUD, 1.0f)
+            delay(130)
+            // 2. Snare Click
+            testPrimitive(VibrationEffect.Composition.PRIMITIVE_CLICK, 0.9f)
+            delay(120)
+            // 3. Low Tick
+            testPrimitive(VibrationEffect.Composition.PRIMITIVE_LOW_TICK, 0.8f)
+            delay(100)
+            // 4. Quick Rise Swell
+            testPrimitive(VibrationEffect.Composition.PRIMITIVE_QUICK_RISE, 1.0f)
+            delay(140)
+            // 5. Heavy Double Drop
+            if (hardwareStatus.hasAmplitudeControl) {
+                val effect = VibrationEffect.createOneShot(60, 255)
+                vibrateWithFallback(effect)
+            } else {
+                testPrimitive(VibrationEffect.Composition.PRIMITIVE_THUD, 1.0f)
             }
         }
     }
 
-    /**
-     * Tests continuous custom vibration envelope
-     */
     fun testWaveformDemo() {
         if (vibrator == null) return
         try {
             if (hardwareStatus.hasAmplitudeControl) {
-                // Synthesizes a riser and sudden bass explosion
-                val timings = longArrayOf(0, 30, 30, 30, 30, 30, 30, 100)
-                val amplitudes = intArrayOf(0, 20, 50, 90, 140, 200, 255, 120)
+                val timings = longArrayOf(0, 30, 30, 30, 30, 40, 60)
+                val amplitudes = intArrayOf(0, 40, 90, 150, 220, 255, 160)
                 val effect = VibrationEffect.createWaveform(timings, amplitudes, -1)
-                vibrateWithAttributes(effect)
+                vibrateWithFallback(effect)
             } else {
-                val effect = VibrationEffect.createOneShot(150, VibrationEffect.DEFAULT_AMPLITUDE)
-                vibrateWithAttributes(effect)
+                val effect = VibrationEffect.createOneShot(120, VibrationEffect.DEFAULT_AMPLITUDE)
+                vibrateWithFallback(effect)
             }
         } catch (e: Exception) {
             Log.e(tag, "Failed test waveform: ${e.message}")
@@ -255,15 +312,26 @@ class PixelHapticEngine(private val context: Context) {
         }
     }
 
-    private fun vibrateWithAttributes(effect: VibrationEffect) {
+    private fun vibrateWithFallback(effect: VibrationEffect) {
         val vib = vibrator ?: return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && mediaVibrationAttributes != null) {
-            vib.vibrate(effect, mediaVibrationAttributes!!)
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            vib.vibrate(effect)
-        } else {
-            @Suppress("DEPRECATION")
-            vib.vibrate(30)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && touchVibrationAttributes != null) {
+                vib.vibrate(effect, touchVibrationAttributes!!)
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vib.vibrate(effect)
+            } else {
+                @Suppress("DEPRECATION")
+                vib.vibrate(40)
+            }
+        } catch (e: Exception) {
+            // Unrestricted fallback directly to vib.vibrate
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    vib.vibrate(effect)
+                }
+            } catch (e2: Exception) {
+                Log.e(tag, "Vibration failed completely: ${e2.message}")
+            }
         }
     }
 }

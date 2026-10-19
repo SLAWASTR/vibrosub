@@ -5,10 +5,17 @@ import android.util.Log
 import com.vibrosub.player.haptics.PixelHapticEngine
 import com.vibrosub.player.model.HapticEngineMode
 import com.vibrosub.player.model.HapticSettings
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlin.math.hypot
 import kotlin.math.max
+import kotlin.math.sqrt
 
 class AudioVisualizerEngine(
     private val hapticEngine: PixelHapticEngine
@@ -18,20 +25,30 @@ class AudioVisualizerEngine(
     private var visualizer: Visualizer? = null
     private var currentSessionId: Int = 0
 
-    // Settings reference
     var settings: HapticSettings = HapticSettings()
+    var isPlaying: Boolean = false
+        set(value) {
+            field = value
+            if (value) startFallbackWatcher() else stopFallbackWatcher()
+        }
 
-    // Observable states for UI animations
+    // Observable states for UI animations and diagnostics
     private val _bassPulse = MutableStateFlow(0f)
     val bassPulse = _bassPulse.asStateFlow()
 
     private val _spectrumBars = MutableStateFlow(FloatArray(16))
     val spectrumBars = _spectrumBars.asStateFlow()
 
-    // Transient detection state
-    private var movingAverageBass = 0.1f
-    private var movingAverageSnare = 0.1f
-    private val decayFactor = 0.88f
+    private val _activeHapticLabel = MutableStateFlow("Ожидание музыки...")
+    val activeHapticLabel = _activeHapticLabel.asStateFlow()
+
+    // Real-time tracking
+    @Volatile
+    private var lastDataReceivedTime = 0L
+    private var movingAverageEnergy = 0.15f
+    private var movingAverageSnare = 0.12f
+    private var fallbackJob: Job? = null
+    private val scope = CoroutineScope(Dispatchers.Default + Job())
 
     fun attachToSession(audioSessionId: Int) {
         if (audioSessionId <= 0) return
@@ -53,7 +70,10 @@ class AudioVisualizerEngine(
                             waveform: ByteArray?,
                             samplingRate: Int
                         ) {
-                            // Waveform unused, using FFT for accurate frequency bands
+                            if (waveform != null && waveform.isNotEmpty()) {
+                                lastDataReceivedTime = System.currentTimeMillis()
+                                processWaveformData(waveform)
+                            }
                         }
 
                         override fun onFftDataCapture(
@@ -61,17 +81,19 @@ class AudioVisualizerEngine(
                             fft: ByteArray?,
                             samplingRate: Int
                         ) {
-                            if (fft == null || fft.isEmpty()) return
-                            processFftData(fft, samplingRate)
+                            if (fft != null && fft.isNotEmpty()) {
+                                lastDataReceivedTime = System.currentTimeMillis()
+                                processFftData(fft, samplingRate)
+                            }
                         }
                     },
                     Visualizer.getMaxCaptureRate(),
-                    false,
-                    true
+                    true, // CAPTURE WAVEFORM!
+                    true  // CAPTURE FFT!
                 )
                 enabled = true
             }
-            Log.d(tag, "Visualizer successfully attached to audio session: $audioSessionId")
+            Log.d(tag, "Visualizer attached to audio session: $audioSessionId")
         } catch (e: SecurityException) {
             Log.e(tag, "RECORD_AUDIO permission missing for Visualizer: ${e.message}")
         } catch (e: Exception) {
@@ -79,28 +101,51 @@ class AudioVisualizerEngine(
         }
     }
 
+    private fun processWaveformData(waveform: ByteArray) {
+        var sumSquares = 0.0
+        var peakValue = 0
+
+        for (b in waveform) {
+            val value = Math.abs((b.toInt() and 0xFF) - 128)
+            sumSquares += value * value
+            if (value > peakValue) peakValue = value
+        }
+
+        val rms = (sqrt(sumSquares / waveform.size) / 80.0).coerceIn(0.0, 1.0).toFloat()
+        val peak = (peakValue / 115.0).coerceIn(0.0, 1.0).toFloat()
+        val combinedWaveformEnergy = (rms * 0.7f + peak * 0.5f).coerceIn(0f, 1.2f)
+
+        // Update animated pulse
+        _bassPulse.value = (_bassPulse.value * 0.45f + combinedWaveformEnergy * 0.55f).coerceIn(0f, 1f)
+
+        // If FFT is quiet or delayed, waveform immediately drives accompaniment
+        if (settings.enabled && combinedWaveformEnergy > settings.sensitivityThreshold) {
+            val isBeatTransient = combinedWaveformEnergy > (movingAverageEnergy * 1.25f)
+            if (isBeatTransient) {
+                _activeHapticLabel.value = "🥁 Удар бита (THUD) • ${(combinedWaveformEnergy * 100).toInt()}%"
+                hapticEngine.triggerSubwooferPunch(combinedWaveformEnergy, settings)
+            } else if (settings.enableContinuousGroove) {
+                _activeHapticLabel.value = "🌊 Волна энергии (GROOVE) • ${(rms * 100).toInt()}%"
+                hapticEngine.triggerContinuousRumble(rms, 35L, settings)
+            }
+        }
+        movingAverageEnergy = movingAverageEnergy * 0.85f + combinedWaveformEnergy * 0.15f
+    }
+
     private fun processFftData(fft: ByteArray, samplingRate: Int) {
         val n = fft.size
         val halfN = n / 2
-        val binWidthHz = (samplingRate / 1000f) / n // in kHz -> Hz
+        val binWidthHz = (samplingRate / 1000f) / n
 
         val magnitudes = FloatArray(halfN)
-        magnitudes[0] = Math.abs(fft[0].toFloat()) // DC
+        magnitudes[0] = Math.abs(fft[0].toFloat())
         for (k in 1 until halfN) {
             val re = fft[2 * k].toFloat()
             val im = fft[2 * k + 1].toFloat()
             magnitudes[k] = hypot(re, im)
         }
 
-        // Frequency band aggregations
-        var subBassSum = 0f
-        var subBassCount = 0
-        var kickBassSum = 0f
-        var kickBassCount = 0
-        var snareSum = 0f
-        var snareCount = 0
-
-        // Spectrum bars (16 bins)
+        // Spectrum bars (16 bands)
         val bars = FloatArray(16)
         val step = max(1, halfN / 16)
         for (i in 0 until 16) {
@@ -108,11 +153,18 @@ class AudioVisualizerEngine(
             for (j in (i * step) until ((i + 1) * step).coerceAtMost(halfN)) {
                 sum += magnitudes[j]
             }
-            bars[i] = (sum / (step * 80f)).coerceIn(0f, 1f)
+            bars[i] = (sum / (step * 70f)).coerceIn(0.05f, 1f)
         }
         _spectrumBars.value = bars
 
-        // Calculate specific acoustic frequencies
+        // Frequency separation
+        var subBassSum = 0f
+        var subBassCount = 0
+        var kickBassSum = 0f
+        var kickBassCount = 0
+        var snareSum = 0f
+        var snareCount = 0
+
         for (k in 1 until halfN) {
             val freqHz = k * binWidthHz * 1000f
             val mag = magnitudes[k]
@@ -123,84 +175,124 @@ class AudioVisualizerEngine(
             } else if (freqHz in 70f..settings.bassCutoffHz.toFloat()) {
                 kickBassSum += mag
                 kickBassCount++
-            } else if (freqHz in 150f..350f) {
+            } else if (freqHz in 150f..380f) {
                 snareSum += mag
                 snareCount++
             }
         }
 
-        val rawSubBass = if (subBassCount > 0) (subBassSum / subBassCount) / 60f else 0f
-        val rawKickBass = if (kickBassCount > 0) (kickBassSum / kickBassCount) / 60f else 0f
-        val rawSnare = if (snareCount > 0) (snareSum / snareCount) / 75f else 0f
+        val kickEnergy = if (kickBassCount > 0) (kickBassSum / kickBassCount) / 45f else 0f
+        val snareEnergy = if (snareCount > 0) (snareSum / snareCount) / 55f else 0f
+        val subEnergy = if (subBassCount > 0) (subBassSum / subBassCount) / 45f else 0f
 
-        val combinedBass = (rawSubBass * 0.6f + rawKickBass * 0.8f).coerceIn(0f, 1.5f)
-        val normalizedBass = combinedBass.coerceIn(0f, 1f)
+        dispatchAcousticHaptics(kickEnergy, snareEnergy, subEnergy)
+    }
 
-        // Smooth pulse for UI animations
-        _bassPulse.value = (_bassPulse.value * 0.6f + normalizedBass * 0.4f).coerceIn(0f, 1f)
+    private fun dispatchAcousticHaptics(
+        kick: Float,
+        snare: Float,
+        sub: Float
+    ) {
+        if (!settings.enabled) return
 
-        // Haptic routing based on engine mode
-        if (settings.enabled) {
-            dispatchHaptics(rawSubBass, rawKickBass, rawSnare, combinedBass)
+        movingAverageSnare = movingAverageSnare * 0.85f + snare * 0.15f
+
+        when (settings.engineMode) {
+            HapticEngineMode.FULL_IMMERSION -> {
+                // Layer 1: Kick Impact
+                val isKick = kick > settings.sensitivityThreshold && kick > (movingAverageEnergy * 1.22f)
+                // Layer 2: Snare / Percussion Accent
+                val isSnare = settings.enableClicksOnSnare &&
+                        snare > settings.sensitivityThreshold &&
+                        snare > (movingAverageSnare * 1.30f) &&
+                        snare > (kick * 0.85f)
+
+                if (isKick) {
+                    _activeHapticLabel.value = "🥁 Бочка 808 (THUD) • ${(kick * 100).toInt()}%"
+                    hapticEngine.triggerSubwooferPunch(kick, settings)
+                } else if (isSnare) {
+                    _activeHapticLabel.value = "✨ Снейр / Клэп (CLICK) • ${(snare * 100).toInt()}%"
+                    hapticEngine.triggerTransientClick(snare, settings)
+                } else if (settings.enableContinuousGroove && sub > (settings.sensitivityThreshold * 0.8f)) {
+                    _activeHapticLabel.value = "🌊 Саб-бас рокот • ${(sub * 100).toInt()}%"
+                    hapticEngine.triggerContinuousRumble(sub, 30L, settings)
+                }
+            }
+
+            HapticEngineMode.RHYTHM_BEAT -> {
+                val isKick = kick > settings.sensitivityThreshold && kick > (movingAverageEnergy * 1.20f)
+                val isSnare = snare > settings.sensitivityThreshold && snare > (movingAverageSnare * 1.25f)
+
+                if (isKick) {
+                    _activeHapticLabel.value = "🥁 Ритм-бочка (THUD) • ${(kick * 100).toInt()}%"
+                    hapticEngine.triggerSubwooferPunch(kick, settings)
+                } else if (isSnare) {
+                    _activeHapticLabel.value = "✨ Ритм-снейр (CLICK) • ${(snare * 100).toInt()}%"
+                    hapticEngine.triggerTransientClick(snare, settings)
+                }
+            }
+
+            HapticEngineMode.DYNAMIC_FLOW -> {
+                val flowEnergy = (kick * 0.5f + sub * 0.5f).coerceIn(0f, 1f)
+                if (flowEnergy > (settings.sensitivityThreshold * 0.7f)) {
+                    _activeHapticLabel.value = "🌊 Плавный пульс • ${(flowEnergy * 100).toInt()}%"
+                    hapticEngine.triggerContinuousRumble(flowEnergy, 40L, settings)
+                }
+            }
+
+            HapticEngineMode.MAX_PUNCH -> {
+                val isImpact = kick > settings.sensitivityThreshold || sub > settings.sensitivityThreshold
+                if (isImpact) {
+                    val maxAmp = max(kick, sub).coerceIn(0.2f, 1.0f)
+                    _activeHapticLabel.value = "⚡ МАКСИМАЛЬНЫЙ УДАР • ${(maxAmp * 150).toInt()}%"
+                    hapticEngine.triggerSubwooferPunch(maxAmp * 1.2f, settings)
+                }
+            }
         }
     }
 
-    private fun dispatchHaptics(
-        subBass: Float,
-        kickBass: Float,
-        snare: Float,
-        totalBass: Float
-    ) {
-        movingAverageBass = movingAverageBass * decayFactor + totalBass * (1f - decayFactor)
-        movingAverageSnare = movingAverageSnare * decayFactor + snare * (1f - decayFactor)
+    /**
+     * Fallback Rhythmic Companion:
+     * If visualizer callbacks stop or audio is in hardware offload,
+     * this guarantees that tactile beats ALWAYS accompany the music.
+     */
+    private fun startFallbackWatcher() {
+        fallbackJob?.cancel()
+        fallbackJob = scope.launch {
+            var stepCounter = 0
+            while (isActive) {
+                delay(125) // 8th note grid at 120 BPM
+                if (!isPlaying || !settings.enabled) continue
 
-        when (settings.engineMode) {
-            HapticEngineMode.PIXEL_SUBWOOFER -> {
-                // Kick drum transient peak detector
-                val isKickTransient = totalBass > settings.sensitivityThreshold &&
-                        totalBass > (movingAverageBass * 1.28f)
+                val timeSinceLastData = System.currentTimeMillis() - lastDataReceivedTime
+                if (timeSinceLastData > 350) {
+                    // Visualizer is not sending data -> trigger companion beat
+                    val isKickStep = (stepCounter % 4 == 0)
+                    val isSnareStep = (stepCounter % 4 == 2)
 
-                if (isKickTransient) {
-                    val velocity = (totalBass * 1.1f).coerceIn(0.1f, 1.0f)
-                    hapticEngine.triggerSubwooferPunch(velocity, settings)
+                    if (isKickStep) {
+                        _activeHapticLabel.value = "🥁 Ритм-компаньон (Kick) • 100%"
+                        hapticEngine.triggerSubwooferPunch(0.85f, settings)
+                        _bassPulse.value = 0.85f
+                    } else if (isSnareStep && settings.enableClicksOnSnare) {
+                        _activeHapticLabel.value = "✨ Ритм-компаньон (Snare) • 80%"
+                        hapticEngine.triggerTransientClick(0.75f, settings)
+                    }
+                    stepCounter++
                 }
-
-                // Rolling continuous sub-bass rumble
-                if (subBass > (settings.sensitivityThreshold * 0.9f)) {
-                    val rumbleAmp = (subBass * 0.75f).coerceIn(0.1f, 0.9f)
-                    hapticEngine.triggerContinuousRumble(rumbleAmp, 30L, settings)
-                }
-            }
-
-            HapticEngineMode.TRANSIENT_BEAT -> {
-                // Focus strictly on punchy kick and crisp snare strikes
-                val isKick = totalBass > settings.sensitivityThreshold &&
-                        totalBass > (movingAverageBass * 1.35f)
-                val isSnare = snare > (settings.sensitivityThreshold * 1.1f) &&
-                        snare > (movingAverageSnare * 1.4f)
-
-                if (isKick) {
-                    hapticEngine.triggerSubwooferPunch(totalBass.coerceIn(0.2f, 1.0f), settings)
-                } else if (isSnare) {
-                    hapticEngine.triggerTransientClick(snare.coerceIn(0.2f, 0.9f), settings)
-                }
-            }
-
-            HapticEngineMode.CONTINUOUS_WAVEFORM -> {
-                // Direct amplitude tracking
-                if (totalBass > settings.sensitivityThreshold) {
-                    val amp = totalBass.coerceIn(0.05f, 1.0f)
-                    hapticEngine.triggerContinuousRumble(amp, 40L, settings)
-                }
-            }
-
-            HapticEngineMode.NATIVE_HAPTIC_GENERATOR -> {
-                // Handled in hardware by DSP, no manual vibration needed
             }
         }
+    }
+
+    private fun stopFallbackWatcher() {
+        fallbackJob?.cancel()
+        fallbackJob = null
+        _activeHapticLabel.value = "Музыка на паузе"
+        _bassPulse.value = 0f
     }
 
     fun release() {
+        stopFallbackWatcher()
         try {
             visualizer?.enabled = false
             visualizer?.release()
