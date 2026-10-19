@@ -211,9 +211,8 @@ class MusicPlayerController(private val context: Context) {
         _settings.value = newSettings
         visualizerEngine.settings = newSettings
 
-        // Handle native HapticGenerator mode toggle
-        val useHapticGen = newSettings.engineMode == HapticEngineMode.NATIVE_HAPTIC_GENERATOR && newSettings.enabled
-        hapticGeneratorManager.setEnabled(useHapticGen)
+        // Handle native HapticGenerator toggle
+        hapticGeneratorManager.setEnabled(newSettings.enabled)
 
         if (!newSettings.enabled) {
             hapticEngine.stop()
