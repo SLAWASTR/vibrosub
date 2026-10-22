@@ -66,12 +66,12 @@ fun PixelDiagnosticsCard(
                 )
                 Column {
                     Text(
-                        text = "Аппаратный статус Pixel 8 Pro",
+                        text = "Аппаратный статус вибромотора",
                         style = MaterialTheme.typography.titleLarge,
                         color = TextPrimary
                     )
                     Text(
-                        text = "Диагностика тактильного вибромотора LRA",
+                        text = "Диагностика тактильного привода устройства",
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary
                     )
@@ -135,7 +135,7 @@ fun PixelDiagnosticsCard(
                     modifier = Modifier.size(18.dp)
                 )
                 Text(
-                    text = "Pixel 8 Pro использует аппаратный драйвер Cirrus Logic с мгновенным откликом (менее 5 мс) и широким динамическим диапазоном частот.",
+                    text = "VibroSub автоматически оптимизирует отклик под вибромотор вашего смартфона, раскрывая максимум на устройствах с быстрыми приводами LRA (Google Pixel, Samsung Galaxy, OnePlus, Xiaomi и др.).",
                     style = MaterialTheme.typography.bodyMedium,
                     color = TextSecondary,
                     fontSize = 12.sp,

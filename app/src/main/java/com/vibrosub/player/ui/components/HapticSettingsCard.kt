@@ -90,7 +90,7 @@ fun HapticSettingsCard(
                             color = TextPrimary
                         )
                         Text(
-                            text = if (settings.enabled) "Включено для Pixel 8 Pro LRA" else "Выключено",
+                            text = if (settings.enabled) "Активно (LRA / Тактильный отклик)" else "Выключено",
                             style = MaterialTheme.typography.bodyMedium,
                             color = if (settings.enabled) ElectricCyan else TextSecondary
                         )
@@ -228,7 +228,7 @@ fun HapticSettingsCard(
                         modifier = Modifier.padding(end = 8.dp)
                     )
                     Text(
-                        text = "Тонкая настройка Pixel 8 Pro",
+                        text = "Расширенная настройка виброотклика",
                         style = MaterialTheme.typography.titleLarge,
                         color = TextPrimary,
                         fontSize = 16.sp

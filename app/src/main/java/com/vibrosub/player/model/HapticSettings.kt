@@ -43,7 +43,7 @@ data class HapticSettings(
 data class AudioTrackInfo(
     val title: String = "Radiohead - No Surprises (Акустический тест)",
     val artist: String = "VibroSub Omni-Spectrum Engine",
-    val album: String = "Pixel 8 Pro Haptic Master",
+    val album: String = "VibroSub Haptic Master",
     val durationMs: Long = 0L,
     val currentPositionMs: Long = 0L,
     val isPlaying: Boolean = false,

@@ -69,7 +69,7 @@ class MusicPlayerController(private val context: Context) {
         AudioTrackInfo(
             title = "Radiohead - No Surprises",
             artist = "Акустический тест (Колокольчики)",
-            album = "Pixel 8 Pro Haptic Master",
+            album = "VibroSub Haptic Master",
             durationMs = 0L,
             currentPositionMs = 0L,
             isPlaying = false
@@ -299,7 +299,7 @@ class MusicPlayerController(private val context: Context) {
             uri = uri,
             title = "Radiohead - No Surprises",
             artist = "Акустика & Колокольчики (Demo)",
-            album = "Pixel 8 Pro Haptic Master"
+            album = "VibroSub Haptic Master"
         )
     }
 
@@ -309,7 +309,7 @@ class MusicPlayerController(private val context: Context) {
             uri = demoUri,
             title = "808 Sub-Bass Trap Drop",
             artist = "VibroSub Generator",
-            album = "Pixel 8 Pro Haptic Test"
+            album = "VibroSub Haptic Test"
         )
     }
 

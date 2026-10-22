@@ -233,8 +233,8 @@ fun MainScreen(controller: MusicPlayerController) {
                     NavigationBarItem(
                         selected = selectedTab == 3,
                         onClick = { selectedTab = 3 },
-                        icon = { Icon(Icons.Default.Vibration, contentDescription = "Тест Pixel") },
-                        label = { Text("Тест Pixel", fontSize = 11.sp) },
+                        icon = { Icon(Icons.Default.Vibration, contentDescription = "Тест вибро") },
+                        label = { Text("Тест вибро", fontSize = 11.sp) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = BassPunchOrange,
                             selectedTextColor = BassPunchOrange,

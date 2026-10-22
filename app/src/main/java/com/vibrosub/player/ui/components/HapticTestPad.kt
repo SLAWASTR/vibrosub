@@ -77,7 +77,7 @@ fun HapticTestPad(
                         color = TextPrimary
                     )
                     Text(
-                        text = "Нажимайте на кнопки, чтобы почувствовать примитивы Pixel 8 Pro",
+                        text = "Нажимайте на кнопки, чтобы протестировать отклик мотора вашего смартфона",
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary
                     )
